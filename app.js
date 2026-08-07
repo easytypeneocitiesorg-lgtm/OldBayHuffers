@@ -1,10 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { 
-  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
-  onAuthStateChanged, signOut 
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { 
-  getDatabase, ref, push, onValue, serverTimestamp 
+  getDatabase, ref, push, onValue, serverTimestamp, get, child, set 
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
@@ -19,8 +15,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getDatabase(app); 
+const dbRef = ref(db);
 
 // DOM Elements
 const authScreen = document.getElementById('auth-screen');
@@ -37,80 +33,117 @@ const messageInput = document.getElementById('message-input');
 const messagesContainer = document.getElementById('messages-container');
 
 let unsubscribeMessages = null;
+let currentActiveUser = null;
 
-// Helper function to turn username into a fake email for Firebase Auth
-const formatUsernameForAuth = (username) => {
-  const safeName = username.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  return `${safeName}@obh.local`;
-};
+// Helper to switch screens and load chat
+function logUserIn(username) {
+  currentActiveUser = username;
+  authScreen.classList.add('hidden');
+  chatScreen.classList.remove('hidden');
+  currentUserSpan.textContent = username;
+  loadMessages();
+}
 
-// Listen for Login State
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    authScreen.classList.add('hidden');
-    chatScreen.classList.remove('hidden');
-    currentUserSpan.textContent = user.email.split('@')[0]; 
-    loadMessages();
-  } else {
-    authScreen.classList.remove('hidden');
-    chatScreen.classList.add('hidden');
-    if (unsubscribeMessages) unsubscribeMessages();
-  }
-});
+// Check if user is already logged in via Local Storage on page load
+const savedSession = localStorage.getItem('obh_session');
+if (savedSession) {
+  logUserIn(savedSession);
+}
 
 // Login
 loginBtn.addEventListener('click', async (e) => {
   e.preventDefault();
-  const fakeEmail = formatUsernameForAuth(usernameInput.value);
+  authError.textContent = 'Checking...';
+  
+  const username = usernameInput.value.trim().toLowerCase();
+  const password = passwordInput.value;
+
+  if (username === "" || password === "") {
+    authError.textContent = "Please enter both username and password.";
+    return;
+  }
+
   try {
-    await signInWithEmailAndPassword(auth, fakeEmail, passwordInput.value);
-    authError.textContent = '';
+    const snapshot = await get(child(dbRef, `users/${username}`));
+    if (snapshot.exists()) {
+      const userData = snapshot.val();
+      if (userData.password === password) {
+        // Password matches! Save session and log in
+        localStorage.setItem('obh_session', username);
+        authError.textContent = '';
+        logUserIn(username);
+      } else {
+        authError.textContent = "Incorrect password.";
+      }
+    } else {
+      authError.textContent = "User not found. Try creating an account.";
+    }
   } catch (error) {
-    authError.textContent = "Invalid username or password.";
+    authError.textContent = "Error connecting to database.";
+    console.error(error);
   }
 });
 
 // Sign Up
 signupBtn.addEventListener('click', async (e) => {
   e.preventDefault();
-  const fakeEmail = formatUsernameForAuth(usernameInput.value);
+  authError.textContent = 'Checking...';
+
+  const username = usernameInput.value.trim().toLowerCase();
+  const password = passwordInput.value;
   
-  if (usernameInput.value.trim().length < 3) {
+  if (username.length < 3) {
     authError.textContent = "Username must be at least 3 characters.";
+    return;
+  }
+  if (password.length < 4) {
+    authError.textContent = "Password must be at least 4 characters.";
     return;
   }
 
   try {
-    await createUserWithEmailAndPassword(auth, fakeEmail, passwordInput.value);
-    authError.textContent = '';
-  } catch (error) {
-    if (error.code === 'auth/email-already-in-use') {
+    const snapshot = await get(child(dbRef, `users/${username}`));
+    if (snapshot.exists()) {
       authError.textContent = "Username is already taken.";
     } else {
-      authError.textContent = error.message;
+      // Username is free, save it to the database
+      await set(ref(db, `users/${username}`), {
+        password: password,
+        createdAt: serverTimestamp()
+      });
+      
+      // Save session and log in
+      localStorage.setItem('obh_session', username);
+      authError.textContent = '';
+      logUserIn(username);
     }
+  } catch (error) {
+    authError.textContent = "Error connecting to database.";
+    console.error(error);
   }
 });
 
 // Logout
 logoutBtn.addEventListener('click', () => {
-  signOut(auth);
+  localStorage.removeItem('obh_session');
+  currentActiveUser = null;
+  authScreen.classList.remove('hidden');
+  chatScreen.classList.add('hidden');
+  if (unsubscribeMessages) unsubscribeMessages();
+  usernameInput.value = '';
+  passwordInput.value = '';
 });
 
 // Send Message
 messageForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = messageInput.value.trim();
-  if (text === "") return;
-
-  const displayUsername = auth.currentUser.email.split('@')[0];
+  if (text === "" || !currentActiveUser) return;
 
   try {
-    // Push adds a unique ID automatically in Realtime Database
     await push(ref(db, "messages"), {
       text: text,
-      uid: auth.currentUser.uid,
-      username: displayUsername, 
+      username: currentActiveUser, 
       createdAt: serverTimestamp()
     });
     messageInput.value = '';
@@ -126,7 +159,6 @@ function loadMessages() {
   unsubscribeMessages = onValue(messagesRef, (snapshot) => {
     messagesContainer.innerHTML = ''; 
     
-    // Realtime DB uses push IDs which are chronologically ordered by default
     snapshot.forEach((childSnapshot) => {
       const data = childSnapshot.val();
       const messageDiv = document.createElement('div');
@@ -134,7 +166,6 @@ function loadMessages() {
       
       let timeString = 'Just now';
       if (data.createdAt) {
-        // Realtime DB saves timestamps as numbers (milliseconds)
         timeString = new Date(data.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       }
       
