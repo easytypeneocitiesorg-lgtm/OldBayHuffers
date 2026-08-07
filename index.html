@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Steamer - Maryland Chat</title>
+  <title>Old Bay Huffers - Maryland Chat</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,11 +11,12 @@
   <!-- Auth Screen -->
   <div id="auth-screen" class="screen">
     <div class="auth-box">
-      <h1>🦀 The Steamer</h1>
+      <h1>🦀 Old Bay Huffers</h1>
       <p>Maryland's finest chatroom</p>
       
       <form id="auth-form">
-        <input type="email" id="email" placeholder="Email address" required>
+        <!-- Changed to text input for Username -->
+        <input type="text" id="username" placeholder="Username" required autocomplete="off">
         <input type="password" id="password" placeholder="Password" required>
         
         <div class="auth-buttons">
@@ -30,7 +31,7 @@
   <!-- Chat Screen -->
   <div id="chat-screen" class="screen hidden">
     <div class="sidebar">
-      <h2>🦀 The Steamer</h2>
+      <h2>🦀 Old Bay Huffers</h2>
       <div class="channels">
         <div class="channel active"># blue-crabs-general</div>
         <div class="channel"># ravens-flock</div>
