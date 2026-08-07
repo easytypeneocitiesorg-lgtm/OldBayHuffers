@@ -45,14 +45,27 @@ const ageSelect = document.getElementById('age-select');
 const loginBtn = document.getElementById('login-btn');
 const signupBtn = document.getElementById('signup-btn');
 
+// Profile & Reply UI
+const profileModal = document.getElementById('profile-modal');
+const editProfileBtn = document.getElementById('edit-profile-btn');
+const saveProfileBtn = document.getElementById('save-profile-btn');
+const cancelProfileBtn = document.getElementById('cancel-profile-btn');
+const displayNameInput = document.getElementById('display-name-input');
+const bioInput = document.getElementById('bio-input');
+const replyBanner = document.getElementById('reply-banner');
+const replyToName = document.getElementById('reply-to-name');
+const replyToText = document.getElementById('reply-to-text');
+const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+
 let unsubscribeMessages = null;
 let unsubscribeTyping = null;
 let currentActiveUser = null;
 let currentUserData = {};
 let lastMessageTime = 0;
 let attachedFileData = null;
-let currentChannel = "main"; // "main" or "staff"
+let currentChannel = "main";
 let typingTimeout = null;
+let currentReplyContext = null;
 
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -60,6 +73,12 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
   reader.onload = () => resolve(reader.result);
   reader.onerror = (error) => reject(error);
 });
+
+function updateUIAfterLogin(username) {
+  currentPfpImg.src = currentUserData.pfp || DEFAULT_PFP;
+  const displayName = currentUserData.displayName || username;
+  currentUserSpan.innerHTML = displayName + (currentUserData.isStaff ? ' <span class="staff-badge" title="Staff">🛡️</span>' : '');
+}
 
 async function logUserIn(username) {
   currentActiveUser = username;
@@ -72,23 +91,15 @@ async function logUserIn(username) {
       currentUserData = snap.val();
       if(!currentUserData.pfp) currentUserData.pfp = DEFAULT_PFP;
     }
-    
-    currentPfpImg.src = currentUserData.pfp;
-    currentUserSpan.innerHTML = username + (currentUserData.isStaff ? ' <span class="staff-badge">🛡️</span>' : '');
-  } catch(e) {
-    console.error(e);
-  }
+    updateUIAfterLogin(username);
+  } catch(e) { console.error(e); }
   
   switchChannel('main');
 }
 
-// Session check
 const savedSession = localStorage.getItem('obh_session');
-if (savedSession) {
-  logUserIn(savedSession);
-}
+if (savedSession) logUserIn(savedSession);
 
-// Login
 loginBtn.addEventListener('click', async (e) => {
   e.preventDefault();
   authError.textContent = 'Checking...';
@@ -105,18 +116,14 @@ loginBtn.addEventListener('click', async (e) => {
     } else {
       authError.textContent = "Incorrect username or password.";
     }
-  } catch (error) {
-    authError.textContent = "Database error.";
-  }
+  } catch (error) { authError.textContent = "Database error."; }
 });
 
-// Signup logic (Two steps: Check username, then ask Age)
 signupBtn.addEventListener('click', async (e) => {
   e.preventDefault();
   const username = usernameInput.value.trim().toLowerCase();
   const password = passwordInput.value;
 
-  // Step 1: Validate and show Age dropdown
   if (ageGroup.classList.contains('hidden')) {
     if (username.length < 3 || password.length < 4) {
       authError.textContent = "Username > 3 chars, Password > 4 chars.";
@@ -125,44 +132,29 @@ signupBtn.addEventListener('click', async (e) => {
     authError.textContent = "Checking username...";
     try {
       const snapshot = await get(child(dbRef, `users/${username}`));
-      if (snapshot.exists()) {
-        authError.textContent = "Username is already taken.";
-        return;
-      }
-      // Hide login fields, show age
+      if (snapshot.exists()) return (authError.textContent = "Username taken.");
       authError.textContent = "";
       loginFields.classList.add('hidden');
       loginBtn.classList.add('hidden');
       ageGroup.classList.remove('hidden');
       signupBtn.textContent = "Complete Account";
-    } catch (e) {
-      authError.textContent = "Database error.";
-    }
-  } 
-  // Step 2: Finalize Creation
-  else {
+    } catch (e) { authError.textContent = "Database error."; }
+  } else {
     authError.textContent = "Creating account...";
     const age = ageSelect.value;
     try {
       await set(ref(db, `users/${username}`), { 
-        password, 
-        pfp: DEFAULT_PFP, 
-        age: age,
-        isStaff: false,
-        createdAt: serverTimestamp() 
+        password, pfp: DEFAULT_PFP, age, isStaff: false, displayName: "", bio: "", createdAt: serverTimestamp() 
       });
       localStorage.setItem('obh_session', username);
       authError.textContent = '';
       logUserIn(username);
       
-      // Reset UI for next time
       loginFields.classList.remove('hidden');
       loginBtn.classList.remove('hidden');
       ageGroup.classList.add('hidden');
       signupBtn.textContent = "Create Account";
-    } catch (error) {
-      authError.textContent = "Database error.";
-    }
+    } catch (error) { authError.textContent = "Database error."; }
   }
 });
 
@@ -176,7 +168,33 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   if (unsubscribeTyping) unsubscribeTyping();
 });
 
-// PFP Upload
+// Profile Editing
+editProfileBtn.addEventListener('click', () => {
+  displayNameInput.value = currentUserData.displayName || "";
+  bioInput.value = currentUserData.bio || "";
+  profileModal.classList.remove('hidden');
+});
+
+cancelProfileBtn.addEventListener('click', () => profileModal.classList.add('hidden'));
+
+saveProfileBtn.addEventListener('click', async () => {
+  const newDisplayName = displayNameInput.value.trim();
+  const newBio = bioInput.value.trim();
+
+  try {
+    await update(ref(db, `users/${currentActiveUser}`), { 
+      displayName: newDisplayName, 
+      bio: newBio 
+    });
+    currentUserData.displayName = newDisplayName;
+    currentUserData.bio = newBio;
+    updateUIAfterLogin(currentActiveUser);
+    profileModal.classList.add('hidden');
+  } catch(err) {
+    alert("Failed to save profile.");
+  }
+});
+
 document.getElementById('pfp-upload').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file || !currentActiveUser) return;
@@ -190,22 +208,47 @@ document.getElementById('pfp-upload').addEventListener('change', async (e) => {
   } catch (err) { console.error(err); }
 });
 
-// Click Username to see Age
+// Delegate Clicks for Usernames & Replies
 messagesContainer.addEventListener('click', async (e) => {
   if (e.target.classList.contains('message-author')) {
     const clickedUser = e.target.dataset.username;
     try {
-      const snap = await get(child(dbRef, `users/${clickedUser}/age`));
+      const snap = await get(child(dbRef, `users/${clickedUser}`));
       if(snap.exists()) {
-        alert(`${clickedUser} is ${snap.val()} years old.`);
-      } else {
-        alert(`${clickedUser}'s age is not set.`);
+        const data = snap.val();
+        const disp = data.displayName ? ` (${data.displayName})` : '';
+        const age = data.age || 'Not set';
+        const bio = data.bio || 'No bio written.';
+        
+        alert(`User: @${clickedUser}${disp}\nAge: ${age}\nBio: ${bio}`);
       }
     } catch(err) { console.error(err); }
   }
+  
+  if (e.target.classList.contains('reply-btn')) {
+    const rUsername = e.target.dataset.username;
+    const rDisplay = e.target.dataset.displayname;
+    const rText = e.target.dataset.text;
+    
+    currentReplyContext = {
+      username: rUsername,
+      displayName: rDisplay,
+      text: rText
+    };
+    
+    replyToName.textContent = rDisplay || rUsername;
+    replyToText.textContent = rText || "Attachment";
+    replyBanner.classList.remove('hidden');
+    messageInput.focus();
+  }
 });
 
-// Channel Switching & Staff Verification
+cancelReplyBtn.addEventListener('click', () => {
+  currentReplyContext = null;
+  replyBanner.classList.add('hidden');
+});
+
+// Channels & Code Logic
 document.querySelectorAll('.channel').forEach(el => {
   el.addEventListener('click', async () => {
     const targetChannel = el.dataset.channel;
@@ -216,37 +259,25 @@ document.querySelectorAll('.channel').forEach(el => {
       if(!code) return;
 
       try {
-        // Read codes.txt
         const res = await fetch('codes.txt');
         if(!res.ok) throw new Error("Could not load codes file.");
         const text = await res.text();
         const validCodes = text.split('\n').map(c => c.trim()).filter(c => c !== "");
 
         if(validCodes.includes(code)) {
-          // Check if code was already claimed in database
           const claimCheck = await get(child(dbRef, `used_codes/${code}`));
-          if(claimCheck.exists()) {
-            alert("This code has already been used!");
-            return;
-          }
+          if(claimCheck.exists()) return alert("This code has already been used!");
           
-          // Claim code and grant staff
           await set(ref(db, `used_codes/${code}`), currentActiveUser);
           await update(ref(db, `users/${currentActiveUser}`), { isStaff: true });
           currentUserData.isStaff = true;
-          currentUserSpan.innerHTML = currentActiveUser + ' <span class="staff-badge">🛡️</span>';
+          updateUIAfterLogin(currentActiveUser);
           alert("Access Granted! You are now Staff.");
         } else {
-          alert("Invalid code.");
-          return;
+          return alert("Invalid code.");
         }
-      } catch(err) {
-        alert("Error verifying code.");
-        console.error(err);
-        return;
-      }
+      } catch(err) { return alert("Error verifying code."); }
     }
-
     switchChannel(targetChannel);
   });
 });
@@ -257,6 +288,9 @@ function switchChannel(channelName) {
   document.querySelector(`.channel[data-channel="${channelName}"]`).classList.add('active');
   document.getElementById('current-channel-title').textContent = channelName === 'main' ? "# main-chat" : "# staff-chat";
   
+  currentReplyContext = null;
+  replyBanner.classList.add('hidden');
+  
   if (unsubscribeMessages) unsubscribeMessages();
   if (unsubscribeTyping) unsubscribeTyping();
   
@@ -264,7 +298,6 @@ function switchChannel(channelName) {
   listenToTyping();
 }
 
-// Typing Indicator Logic
 messageInput.addEventListener('input', () => {
   if (!currentActiveUser) return;
   set(ref(db, `typing/${currentChannel}/${currentActiveUser}`), true);
@@ -279,9 +312,7 @@ function listenToTyping() {
   unsubscribeTyping = onValue(ref(db, `typing/${currentChannel}`), (snapshot) => {
     const typers = [];
     snapshot.forEach((childSnap) => {
-      if (childSnap.key !== currentActiveUser && childSnap.val() === true) {
-        typers.push(childSnap.key);
-      }
+      if (childSnap.key !== currentActiveUser && childSnap.val() === true) typers.push(childSnap.key);
     });
 
     if (typers.length > 0) {
@@ -293,7 +324,6 @@ function listenToTyping() {
   });
 }
 
-// File Attachment handling
 fileUpload.addEventListener('change', async (e) => {
   chatError.classList.add('hidden');
   const file = e.target.files[0];
@@ -319,7 +349,6 @@ document.getElementById('remove-file-btn').addEventListener('click', () => {
   filePreview.classList.add('hidden');
 });
 
-// Send Message
 messageForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = messageInput.value.trim();
@@ -338,27 +367,28 @@ messageForm.addEventListener('submit', async (e) => {
   const payload = {
     text: text,
     username: currentActiveUser,
+    displayName: currentUserData.displayName || "",
     pfp: currentUserData.pfp,
     isStaff: currentUserData.isStaff || false,
     createdAt: serverTimestamp()
   };
 
   if (attachedFileData) payload.file = attachedFileData;
+  if (currentReplyContext) payload.replyTo = currentReplyContext;
 
   messageInput.value = '';
   attachedFileData = null;
   fileUpload.value = "";
   filePreview.classList.add('hidden');
+  currentReplyContext = null;
+  replyBanner.classList.add('hidden');
   
-  // Clear typing status instantly on send
   remove(ref(db, `typing/${currentChannel}/${currentActiveUser}`));
 
-  try {
-    await push(ref(db, `messages_${currentChannel}`), payload);
-  } catch (error) { console.error(error); }
+  try { await push(ref(db, `messages_${currentChannel}`), payload); } 
+  catch (error) { console.error(error); }
 });
 
-// Load Messages
 function loadMessages() {
   const messagesRef = ref(db, `messages_${currentChannel}`);
   
@@ -389,14 +419,33 @@ function loadMessages() {
       }
       
       const badge = data.isStaff ? ' <span class="staff-badge" title="Staff Member">🛡️</span>' : '';
+      const visibleName = data.displayName || data.username;
+      
+      let replyHtml = "";
+      if (data.replyTo) {
+        const repliedName = data.replyTo.displayName || data.replyTo.username;
+        replyHtml = `
+          <div class="replied-message-block">
+            <span class="replied-author">Replying to ${repliedName}:</span> 
+            <span class="replied-text">${data.replyTo.text || "Attachment"}</span>
+          </div>
+        `;
+      }
+
+      const safeText = data.text ? data.text.replace(/"/g, '&quot;') : '';
+      const safeDisp = data.displayName ? data.displayName.replace(/"/g, '&quot;') : '';
 
       messageDiv.innerHTML = `
         <img src="${data.pfp || DEFAULT_PFP}" class="msg-pfp" alt="PFP">
         <div class="msg-content">
           <div class="message-header">
-            <span class="message-author" data-username="${data.username}">${data.username}</span>${badge}
+            <span class="message-author" data-username="${data.username}">${visibleName}</span>${badge}
             <span class="message-time">${timeString}</span>
+            <div class="message-actions">
+              <button class="reply-btn" data-username="${data.username}" data-displayname="${safeDisp}" data-text="${safeText}">Reply</button>
+            </div>
           </div>
+          ${replyHtml}
           <div class="message-text">${data.text}</div>
           ${fileHtml}
         </div>
