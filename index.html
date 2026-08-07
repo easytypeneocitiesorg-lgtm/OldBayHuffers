@@ -40,6 +40,19 @@
     </div>
   </div>
 
+  <!-- Profile Edit Modal -->
+  <div id="profile-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 style="color: var(--ob-blue); margin-bottom: 10px;">Edit Profile</h3>
+      <input type="text" id="display-name-input" placeholder="Display Name (Optional)" maxlength="20">
+      <textarea id="bio-input" placeholder="Write a short bio..." rows="3" maxlength="100"></textarea>
+      <div class="auth-buttons" style="margin-top: 10px;">
+        <button id="save-profile-btn">Save</button>
+        <button id="cancel-profile-btn" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Chat Screen -->
   <div id="chat-screen" class="screen hidden">
     <div class="sidebar">
@@ -47,7 +60,7 @@
         <h2>Old Bay Huffers</h2>
         <div class="channels">
           <div class="channel active" data-channel="main"># main-chat</div>
-          <div class="channel" data-channel="staff"># staff-chat 🛡️</div>
+          <div class="channel" code="staff-chat" data-channel="staff"># staff-chat 🛡️</div>
         </div>
       </div>
       
@@ -60,7 +73,10 @@
           <input type="file" id="pfp-upload" accept="image/*" class="hidden">
           <span id="current-user">User</span>
         </div>
-        <button id="logout-btn">Logout</button>
+        <div style="display: flex; gap: 5px;">
+          <button id="edit-profile-btn" style="background: var(--ob-yellow); color: var(--ob-blue); flex: 1; padding: 6px; font-size: 12px;">⚙️ Profile</button>
+          <button id="logout-btn" style="flex: 1; padding: 6px; font-size: 12px;">Logout</button>
+        </div>
       </div>
     </div>
     
@@ -74,6 +90,12 @@
       </div>
       
       <div class="input-container">
+        <!-- Reply Banner -->
+        <div id="reply-banner" class="hidden">
+          <span>Replying to <strong id="reply-to-name"></strong>: <span id="reply-to-text"></span></span>
+          <button type="button" id="cancel-reply-btn">X</button>
+        </div>
+
         <div id="typing-indicator" class="typing-indicator hidden">Someone is typing...</div>
         
         <div id="file-preview" class="hidden">
