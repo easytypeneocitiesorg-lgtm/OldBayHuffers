@@ -19,7 +19,6 @@ const firebaseConfig = {
   measurementId: "G-DFHQ1WG2WP"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -27,7 +26,7 @@ const db = getFirestore(app);
 // DOM Elements
 const authScreen = document.getElementById('auth-screen');
 const chatScreen = document.getElementById('chat-screen');
-const emailInput = document.getElementById('email');
+const usernameInput = document.getElementById('username'); // Now getting username
 const passwordInput = document.getElementById('password');
 const loginBtn = document.getElementById('login-btn');
 const signupBtn = document.getElementById('signup-btn');
@@ -40,16 +39,22 @@ const messagesContainer = document.getElementById('messages-container');
 
 let unsubscribeMessages = null;
 
-// Listen for Login State (This handles the persistent login)
+// Helper function to turn username into a fake email for Firebase Auth
+const formatUsernameForAuth = (username) => {
+  // Removes spaces and special characters, appends dummy domain
+  const safeName = username.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `${safeName}@obh.local`;
+};
+
+// Listen for Login State
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    // User is logged in
     authScreen.classList.add('hidden');
     chatScreen.classList.remove('hidden');
-    currentUserSpan.textContent = user.email.split('@')[0]; // Simple username
+    // Extract the username back out of the fake email
+    currentUserSpan.textContent = user.email.split('@')[0]; 
     loadMessages();
   } else {
-    // User is logged out
     authScreen.classList.remove('hidden');
     chatScreen.classList.add('hidden');
     if (unsubscribeMessages) unsubscribeMessages();
@@ -59,22 +64,34 @@ onAuthStateChanged(auth, (user) => {
 // Login
 loginBtn.addEventListener('click', async (e) => {
   e.preventDefault();
+  const fakeEmail = formatUsernameForAuth(usernameInput.value);
   try {
-    await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+    await signInWithEmailAndPassword(auth, fakeEmail, passwordInput.value);
     authError.textContent = '';
   } catch (error) {
-    authError.textContent = error.message;
+    authError.textContent = "Invalid username or password.";
   }
 });
 
 // Sign Up
 signupBtn.addEventListener('click', async (e) => {
   e.preventDefault();
+  const fakeEmail = formatUsernameForAuth(usernameInput.value);
+  
+  if (usernameInput.value.trim().length < 3) {
+    authError.textContent = "Username must be at least 3 characters.";
+    return;
+  }
+
   try {
-    await createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+    await createUserWithEmailAndPassword(auth, fakeEmail, passwordInput.value);
     authError.textContent = '';
   } catch (error) {
-    authError.textContent = error.message;
+    if (error.code === 'auth/email-already-in-use') {
+      authError.textContent = "Username is already taken.";
+    } else {
+      authError.textContent = error.message;
+    }
   }
 });
 
@@ -89,11 +106,14 @@ messageForm.addEventListener('submit', async (e) => {
   const text = messageInput.value.trim();
   if (text === "") return;
 
+  // Grab the username string out of the stored fake email
+  const displayUsername = auth.currentUser.email.split('@')[0];
+
   try {
     await addDoc(collection(db, "messages"), {
       text: text,
       uid: auth.currentUser.uid,
-      email: auth.currentUser.email,
+      username: displayUsername, // Saving the username to the database
       createdAt: serverTimestamp()
     });
     messageInput.value = '';
@@ -107,14 +127,13 @@ function loadMessages() {
   const q = query(collection(db, "messages"), orderBy("createdAt", "asc"));
   
   unsubscribeMessages = onSnapshot(q, (snapshot) => {
-    messagesContainer.innerHTML = ''; // Clear current messages
+    messagesContainer.innerHTML = ''; 
     
     snapshot.forEach((doc) => {
       const data = doc.data();
       const messageDiv = document.createElement('div');
       messageDiv.classList.add('message');
       
-      // Format time safely (serverTimestamp might be null briefly while saving)
       let timeString = 'Just now';
       if (data.createdAt) {
         timeString = data.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -122,7 +141,7 @@ function loadMessages() {
       
       messageDiv.innerHTML = `
         <div class="message-header">
-          <span class="message-author">${data.email.split('@')[0]}</span>
+          <span class="message-author">${data.username}</span>
           <span class="message-time">${timeString}</span>
         </div>
         <div class="message-text">${data.text}</div>
@@ -131,7 +150,6 @@ function loadMessages() {
       messagesContainer.appendChild(messageDiv);
     });
     
-    // Scroll to bottom
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   });
 }
