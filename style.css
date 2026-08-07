@@ -23,7 +23,8 @@ input:not([type="file"]), select { padding: 12px; border: 2px solid var(--ob-blu
 button { padding: 12px; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; flex: 1; transition: opacity 0.2s; }
 button:hover { opacity: 0.9; }
 #login-btn, form button[type="submit"] { background-color: var(--ob-red); color: white; }
-#signup-btn.secondary { background-color: var(--ob-blue); color: white; }
+#signup-btn.secondary, #cancel-profile-btn { background-color: var(--ob-blue); color: white; }
+#save-profile-btn { background-color: var(--ob-red); color: white; }
 .error-msg { color: var(--ob-red); font-size: 14px; margin-top: 10px; text-align: center; font-weight: bold; }
 #login-fields { display: flex; flex-direction: column; gap: 15px; }
 
@@ -45,7 +46,8 @@ button:hover { opacity: 0.9; }
 .pfp-label:hover .pfp-overlay { opacity: 1; }
 #current-user { font-weight: bold; font-size: 16px; word-break: break-all; }
 .staff-badge { color: var(--ob-yellow); margin-left: 5px; font-size: 14px; }
-#logout-btn { background-color: var(--ob-red); padding: 8px 12px; font-size: 14px; }
+#logout-btn { background-color: var(--ob-red); padding: 8px 12px; font-size: 14px; color: white; border: none; cursor: pointer; border-radius: 4px; }
+#edit-profile-btn { border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
 
 /* Chat Area */
 .chat-area { flex: 1; display: flex; flex-direction: column; background-color: var(--bg-color); position: relative;}
@@ -76,5 +78,24 @@ button:hover { opacity: 0.9; }
 #remove-file-btn { background: var(--ob-red); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; }
 .message-input-area { display: flex; gap: 10px; flex-direction: row; }
 .file-label { display: flex; align-items: center; justify-content: center; background: var(--ob-yellow); color: var(--ob-blue); width: 45px; height: 45px; border-radius: 4px; font-size: 24px; font-weight: bold; cursor: pointer; border: 2px solid var(--ob-blue); flex-shrink: 0; }
-#message-input { flex: 1; border: 2px solid #ddd; background-color: #fafafa; }
+#message-input { flex: 1; border: 2px solid #ddd; background-color: #fafafa; padding: 12px; border-radius: 4px;}
 #message-input:focus { outline: none; border-color: var(--ob-blue); }
+
+/* Modal Styles */
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 100; }
+.modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 350px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 2px solid var(--ob-blue); }
+textarea { padding: 10px; border: 2px solid var(--ob-blue); border-radius: 4px; font-size: 14px; width: 100%; resize: none; }
+
+/* Reply Feature */
+#reply-banner { background: var(--ob-yellow); color: var(--ob-dark-blue); padding: 8px 12px; border-radius: 4px 4px 0 0; font-size: 13px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #d4ab00; border-bottom: none; margin-bottom: -10px; z-index: 10; position: relative;}
+#reply-to-text { font-style: italic; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; display: inline-block; vertical-align: bottom; margin-left: 5px; }
+#cancel-reply-btn { background: var(--ob-red); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center;}
+
+.replied-message-block { background: #f0f0f0; border-left: 4px solid var(--ob-blue); padding: 6px 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; color: #555; position: relative; }
+.replied-author { font-weight: bold; color: var(--ob-dark-blue); margin-right: 5px; }
+.replied-text { font-style: italic; }
+
+.message-actions { margin-left: auto; opacity: 0; transition: opacity 0.2s; display: flex; align-items: flex-start; }
+.message:hover .message-actions { opacity: 1; }
+.reply-btn { background: var(--ob-blue); color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+.reply-btn:hover { background: var(--ob-dark-blue); }
