@@ -4,10 +4,9 @@ import {
   onAuthStateChanged, signOut 
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { 
-  getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp 
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  getDatabase, ref, push, onValue, serverTimestamp 
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-// REPLACE THIS with your Firebase config object
 const firebaseConfig = {
   apiKey: "AIzaSyBDo6UZCR44x2o0jCHilqI0_LimNuOrTso",
   authDomain: "oldbayhuffers.firebaseapp.com",
@@ -21,12 +20,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = getDatabase(app); 
 
 // DOM Elements
 const authScreen = document.getElementById('auth-screen');
 const chatScreen = document.getElementById('chat-screen');
-const usernameInput = document.getElementById('username'); // Now getting username
+const usernameInput = document.getElementById('username'); 
 const passwordInput = document.getElementById('password');
 const loginBtn = document.getElementById('login-btn');
 const signupBtn = document.getElementById('signup-btn');
@@ -41,7 +40,6 @@ let unsubscribeMessages = null;
 
 // Helper function to turn username into a fake email for Firebase Auth
 const formatUsernameForAuth = (username) => {
-  // Removes spaces and special characters, appends dummy domain
   const safeName = username.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   return `${safeName}@obh.local`;
 };
@@ -51,7 +49,6 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     authScreen.classList.add('hidden');
     chatScreen.classList.remove('hidden');
-    // Extract the username back out of the fake email
     currentUserSpan.textContent = user.email.split('@')[0]; 
     loadMessages();
   } else {
@@ -106,14 +103,14 @@ messageForm.addEventListener('submit', async (e) => {
   const text = messageInput.value.trim();
   if (text === "") return;
 
-  // Grab the username string out of the stored fake email
   const displayUsername = auth.currentUser.email.split('@')[0];
 
   try {
-    await addDoc(collection(db, "messages"), {
+    // Push adds a unique ID automatically in Realtime Database
+    await push(ref(db, "messages"), {
       text: text,
       uid: auth.currentUser.uid,
-      username: displayUsername, // Saving the username to the database
+      username: displayUsername, 
       createdAt: serverTimestamp()
     });
     messageInput.value = '';
@@ -124,19 +121,21 @@ messageForm.addEventListener('submit', async (e) => {
 
 // Load and Listen to Messages
 function loadMessages() {
-  const q = query(collection(db, "messages"), orderBy("createdAt", "asc"));
+  const messagesRef = ref(db, "messages");
   
-  unsubscribeMessages = onSnapshot(q, (snapshot) => {
+  unsubscribeMessages = onValue(messagesRef, (snapshot) => {
     messagesContainer.innerHTML = ''; 
     
-    snapshot.forEach((doc) => {
-      const data = doc.data();
+    // Realtime DB uses push IDs which are chronologically ordered by default
+    snapshot.forEach((childSnapshot) => {
+      const data = childSnapshot.val();
       const messageDiv = document.createElement('div');
       messageDiv.classList.add('message');
       
       let timeString = 'Just now';
       if (data.createdAt) {
-        timeString = data.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        // Realtime DB saves timestamps as numbers (milliseconds)
+        timeString = new Date(data.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       }
       
       messageDiv.innerHTML = `
