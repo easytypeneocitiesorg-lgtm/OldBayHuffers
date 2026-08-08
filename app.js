@@ -80,11 +80,11 @@ function updateUIAfterLogin(username) {
   
   // Custom badges for the sidebar UI
   let badges = '';
+  if (currentUserData.isDev || username === 'thecoolwebsitemaker') {
+    badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
+  }
   if (currentUserData.isStaff) {
     badges += ' <span class="staff-badge" title="Staff">🛡️</span>';
-  }
-  if (username === 'thecoolwebsitemaker') {
-    badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
   }
   
   currentUserSpan.innerHTML = displayName + badges;
@@ -154,7 +154,7 @@ signupBtn.addEventListener('click', async (e) => {
     const age = ageSelect.value;
     try {
       await set(ref(db, `users/${username}`), { 
-        password, pfp: DEFAULT_PFP, age, isStaff: false, displayName: "", bio: "", createdAt: serverTimestamp() 
+        password, pfp: DEFAULT_PFP, age, isStaff: false, isDev: false, displayName: "", bio: "", createdAt: serverTimestamp() 
       });
       localStorage.setItem('obh_session', username);
       authError.textContent = '';
@@ -218,6 +218,38 @@ document.getElementById('pfp-upload').addEventListener('change', async (e) => {
     currentUserData.pfp = base64;
     currentPfpImg.src = base64;
   } catch (err) { console.error(err); }
+});
+
+// Keydown listener for the secret dev badge code
+document.addEventListener('keydown', async (e) => {
+  if (e.key === '=' && currentActiveUser) {
+    const code = prompt("Enter secret code:");
+    if (code === "imadethisdamnsite") {
+      try {
+        const codeStatusRef = ref(db, 'secret_codes/imadethisdamnsite/used');
+        const snap = await get(codeStatusRef);
+        
+        // If the code has already been used, deny access
+        if (snap.exists() && snap.val() === true) {
+          alert("This code has already been used!");
+          return;
+        }
+
+        // Set the code to "used: true" in the database
+        await set(codeStatusRef, true);
+        
+        // Grant the badge
+        await update(ref(db, `users/${currentActiveUser}`), { isDev: true });
+        currentUserData.isDev = true;
+        updateUIAfterLogin(currentActiveUser);
+        alert("Developer badge unlocked!");
+      } catch(err) {
+        console.error("Database error while unlocking badge.", err);
+      }
+    } else if (code) {
+      alert("Invalid code.");
+    }
+  }
 });
 
 // Delegate Clicks for Usernames & Replies
@@ -384,6 +416,7 @@ messageForm.addEventListener('submit', async (e) => {
     displayName: currentUserData?.displayName || "",
     pfp: currentUserData?.pfp || DEFAULT_PFP,
     isStaff: currentUserData?.isStaff || false,
+    isDev: currentUserData?.isDev || false,
     createdAt: serverTimestamp()
   };
 
@@ -433,9 +466,12 @@ function loadMessages() {
       }
       
       // Load badges for chat messages
-      let badges = data.isStaff ? ' <span class="staff-badge" title="Staff Member">🛡️</span>' : '';
-      if (data.username === 'thecoolwebsitemaker') {
+      let badges = '';
+      if (data.isDev || data.username === 'thecoolwebsitemaker') {
         badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
+      }
+      if (data.isStaff) {
+        badges += ' <span class="staff-badge" title="Staff Member">🛡️</span>';
       }
 
       const visibleName = data.displayName || data.username;
