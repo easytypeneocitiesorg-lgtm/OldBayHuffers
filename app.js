@@ -326,7 +326,7 @@ onValue(ref(db, 'global_events/cheddar'), (snapshot) => {
   }
 });
 
-// Delegate Clicks for Usernames, Replies, & Blocks
+// Delegate Clicks for Usernames, Replies, Blocks, & Revoking Staff
 messagesContainer.addEventListener('click', async (e) => {
   if (e.target.classList.contains('message-author')) {
     const clickedUser = e.target.dataset.username;
@@ -371,6 +371,41 @@ messagesContainer.addEventListener('click', async (e) => {
         alert(`${targetUsername} has been blocked.`);
       } catch (err) {
         console.error("Error blocking user:", err);
+      }
+    }
+  }
+
+  if (e.target.classList.contains('revoke-staff-btn')) {
+    const targetUsername = e.target.dataset.username;
+    const confirmRevoke = confirm(`Are you sure you want to revoke staff privileges from ${targetUsername}?`);
+    if (confirmRevoke) {
+      try {
+        // Find and remove the code they used from 'used_codes' in Firebase
+        const usedCodesSnap = await get(child(dbRef, 'used_codes'));
+        if (usedCodesSnap.exists()) {
+          usedCodesSnap.forEach((childSnap) => {
+            if (childSnap.val() === targetUsername) {
+              remove(ref(db, `used_codes/${childSnap.key}`));
+            }
+          });
+        }
+        
+        // Update user isStaff status to false
+        await update(ref(db, `users/${targetUsername}`), { isStaff: false });
+        
+        // If the revokee is currently logged in on this client, clear their staff status live
+        if (currentActiveUser === targetUsername) {
+          currentUserData.isStaff = false;
+          updateUIAfterLogin(currentActiveUser);
+          if (currentChannel === 'staff') {
+            switchChannel('main');
+          }
+        }
+        
+        alert(`Staff privileges have been revoked from ${targetUsername}.`);
+      } catch (err) {
+        console.error("Error revoking staff:", err);
+        alert("Failed to revoke staff privileges.");
       }
     }
   }
@@ -577,6 +612,12 @@ function loadMessages() {
         blockBtnHtml = `<button class="block-btn" data-username="${data.username}" style="background-color: red; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 11px; margin-left: 5px;">Block from site</button>`;
       }
 
+      let revokeStaffBtnHtml = "";
+      const canRevoke = (currentActiveUser === 'thecoolwebsitemaker' || currentActiveUser === 'spookso');
+      if (canRevoke && data.isStaff && data.username !== currentActiveUser && data.username !== 'thecoolwebsitemaker' && data.username !== 'spookso') {
+        revokeStaffBtnHtml = `<button class="revoke-staff-btn" data-username="${data.username}" style="background-color: #ff8800; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 11px; margin-left: 5px;">Revoke Staff</button>`;
+      }
+
       const safeText = data.text ? data.text.replace(/"/g, '&quot;') : '';
       const safeDisp = data.displayName ? data.displayName.replace(/"/g, '&quot;') : '';
 
@@ -589,6 +630,7 @@ function loadMessages() {
             <div class="message-actions">
               <button class="reply-btn" data-username="${data.username}" data-displayname="${safeDisp}" data-text="${safeText}">Reply</button>
               ${blockBtnHtml}
+              ${revokeStaffBtnHtml}
             </div>
           </div>
           ${replyHtml}
