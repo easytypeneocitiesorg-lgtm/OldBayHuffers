@@ -168,14 +168,16 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   if (unsubscribeTyping) unsubscribeTyping();
 });
 
-// Profile Editing
+// Profile Editing - BUG FIXED
 editProfileBtn.addEventListener('click', () => {
-  displayNameInput.value = currentUserData.displayName || "";
-  bioInput.value = currentUserData.bio || "";
+  displayNameInput.value = currentUserData?.displayName || "";
+  bioInput.value = currentUserData?.bio || "";
   profileModal.classList.remove('hidden');
 });
 
-cancelProfileBtn.addEventListener('click', () => profileModal.classList.add('hidden'));
+cancelProfileBtn.addEventListener('click', () => {
+  profileModal.classList.add('hidden');
+});
 
 saveProfileBtn.addEventListener('click', async () => {
   const newDisplayName = displayNameInput.value.trim();
@@ -208,7 +210,7 @@ document.getElementById('pfp-upload').addEventListener('change', async (e) => {
   } catch (err) { console.error(err); }
 });
 
-// Delegate Clicks for Usernames & Replies
+// Delegate Clicks for Usernames & Replies - MISSING USER ALERT ADDED
 messagesContainer.addEventListener('click', async (e) => {
   if (e.target.classList.contains('message-author')) {
     const clickedUser = e.target.dataset.username;
@@ -221,6 +223,8 @@ messagesContainer.addEventListener('click', async (e) => {
         const bio = data.bio || 'No bio written.';
         
         alert(`User: @${clickedUser}${disp}\nAge: ${age}\nBio: ${bio}`);
+      } else {
+        alert(`User @${clickedUser} could not be found. They might be an old test account.`);
       }
     } catch(err) { console.error(err); }
   }
@@ -367,9 +371,9 @@ messageForm.addEventListener('submit', async (e) => {
   const payload = {
     text: text,
     username: currentActiveUser,
-    displayName: currentUserData.displayName || "",
-    pfp: currentUserData.pfp,
-    isStaff: currentUserData.isStaff || false,
+    displayName: currentUserData?.displayName || "",
+    pfp: currentUserData?.pfp || DEFAULT_PFP,
+    isStaff: currentUserData?.isStaff || false,
     createdAt: serverTimestamp()
   };
 
