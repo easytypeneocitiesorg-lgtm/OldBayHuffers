@@ -45,7 +45,8 @@ button:hover { opacity: 0.9; }
 .pfp-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 10px; text-align: center; padding: 2px 0; opacity: 0; transition: opacity 0.2s; }
 .pfp-label:hover .pfp-overlay { opacity: 1; }
 #current-user { font-weight: bold; font-size: 16px; word-break: break-all; }
-.staff-badge { color: var(--ob-yellow); margin-left: 5px; font-size: 14px; }
+.staff-badge { color: var(--ob-yellow); margin-left: 5px; font-size: 14px; cursor: help; }
+.dev-badge { margin-left: 5px; font-size: 14px; cursor: help; }
 #logout-btn { background-color: var(--ob-red); padding: 8px 12px; font-size: 14px; color: white; border: none; cursor: pointer; border-radius: 4px; }
 #edit-profile-btn { border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
 
@@ -81,7 +82,7 @@ button:hover { opacity: 0.9; }
 #message-input { flex: 1; border: 2px solid #ddd; background-color: #fafafa; padding: 12px; border-radius: 4px;}
 #message-input:focus { outline: none; border-color: var(--ob-blue); }
 
-/* Modal Styles - Z-INDEX FIXED */
+/* Modal Styles */
 .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 9999; }
 .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 350px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 2px solid var(--ob-blue); }
 textarea { padding: 10px; border: 2px solid var(--ob-blue); border-radius: 4px; font-size: 14px; width: 100%; resize: none; }
