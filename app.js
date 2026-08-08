@@ -77,7 +77,17 @@ const fileToBase64 = (file) => new Promise((resolve, reject) => {
 function updateUIAfterLogin(username) {
   currentPfpImg.src = currentUserData.pfp || DEFAULT_PFP;
   const displayName = currentUserData.displayName || username;
-  currentUserSpan.innerHTML = displayName + (currentUserData.isStaff ? ' <span class="staff-badge" title="Staff">🛡️</span>' : '');
+  
+  // Custom badges for the sidebar UI
+  let badges = '';
+  if (currentUserData.isStaff) {
+    badges += ' <span class="staff-badge" title="Staff">🛡️</span>';
+  }
+  if (username === 'thecoolwebsitemaker') {
+    badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
+  }
+  
+  currentUserSpan.innerHTML = displayName + badges;
 }
 
 async function logUserIn(username) {
@@ -168,7 +178,7 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   if (unsubscribeTyping) unsubscribeTyping();
 });
 
-// Profile Editing - BUG FIXED
+// Profile Editing
 editProfileBtn.addEventListener('click', () => {
   displayNameInput.value = currentUserData?.displayName || "";
   bioInput.value = currentUserData?.bio || "";
@@ -210,7 +220,7 @@ document.getElementById('pfp-upload').addEventListener('change', async (e) => {
   } catch (err) { console.error(err); }
 });
 
-// Delegate Clicks for Usernames & Replies - MISSING USER ALERT ADDED
+// Delegate Clicks for Usernames & Replies
 messagesContainer.addEventListener('click', async (e) => {
   if (e.target.classList.contains('message-author')) {
     const clickedUser = e.target.dataset.username;
@@ -422,7 +432,12 @@ function loadMessages() {
         }
       }
       
-      const badge = data.isStaff ? ' <span class="staff-badge" title="Staff Member">🛡️</span>' : '';
+      // Load badges for chat messages
+      let badges = data.isStaff ? ' <span class="staff-badge" title="Staff Member">🛡️</span>' : '';
+      if (data.username === 'thecoolwebsitemaker') {
+        badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
+      }
+
       const visibleName = data.displayName || data.username;
       
       let replyHtml = "";
@@ -443,7 +458,7 @@ function loadMessages() {
         <img src="${data.pfp || DEFAULT_PFP}" class="msg-pfp" alt="PFP">
         <div class="msg-content">
           <div class="message-header">
-            <span class="message-author" data-username="${data.username}">${visibleName}</span>${badge}
+            <span class="message-author" data-username="${data.username}">${visibleName}</span>${badges}
             <span class="message-time">${timeString}</span>
             <div class="message-actions">
               <button class="reply-btn" data-username="${data.username}" data-displayname="${safeDisp}" data-text="${safeText}">Reply</button>
