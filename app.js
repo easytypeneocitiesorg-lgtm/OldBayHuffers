@@ -24,6 +24,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 // DOM Elements
 const authScreen = document.getElementById('auth-screen');
 const chatScreen = document.getElementById('chat-screen');
+const blockedScreen = document.getElementById('blocked-screen');
 const usernameInput = document.getElementById('username'); 
 const passwordInput = document.getElementById('password');
 const authError = document.getElementById('auth-error');
@@ -37,6 +38,10 @@ const filePreview = document.getElementById('file-preview');
 const filePreviewName = document.getElementById('file-preview-name');
 const chatError = document.getElementById('chat-error');
 const typingIndicator = document.getElementById('typing-indicator');
+
+// Unblock Elements
+const unblockCodeInput = document.getElementById('unblock-code-input');
+const unblockBtn = document.getElementById('unblock-btn');
 
 // Global Event Elements
 const cheddarOverlay = document.getElementById('cheddar-overlay');
@@ -64,6 +69,7 @@ const cancelReplyBtn = document.getElementById('cancel-reply-btn');
 
 let unsubscribeMessages = null;
 let unsubscribeTyping = null;
+let unsubscribeBlockStatus = null;
 let currentActiveUser = null;
 let currentUserData = {};
 let lastMessageTime = 0;
@@ -83,7 +89,6 @@ function updateUIAfterLogin(username) {
   currentPfpImg.src = currentUserData.pfp || DEFAULT_PFP;
   const displayName = currentUserData.displayName || username;
   
-  // Custom badges for the sidebar UI
   let badges = '';
   if (username === 'thecoolwebsitemaker') {
     badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
@@ -95,10 +100,26 @@ function updateUIAfterLogin(username) {
   currentUserSpan.innerHTML = displayName + badges;
 }
 
+function listenToBlockStatus(username) {
+  if (unsubscribeBlockStatus) unsubscribeBlockStatus();
+  unsubscribeBlockStatus = onValue(ref(db, `blocked_users/${username}`), (snapshot) => {
+    if (snapshot.exists() && snapshot.val() === true) {
+      authScreen.classList.add('hidden');
+      chatScreen.classList.add('hidden');
+      blockedScreen.classList.remove('hidden');
+    } else {
+      blockedScreen.classList.add('hidden');
+      if (currentActiveUser) {
+        authScreen.classList.add('hidden');
+        chatScreen.classList.remove('hidden');
+      }
+    }
+  });
+}
+
 async function logUserIn(username) {
   currentActiveUser = username;
-  authScreen.classList.add('hidden');
-  chatScreen.classList.remove('hidden');
+  listenToBlockStatus(username);
   
   try {
     const snap = await get(child(dbRef, `users/${username}`));
@@ -179,8 +200,14 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   currentUserData = {};
   authScreen.classList.remove('hidden');
   chatScreen.classList.add('hidden');
+  blockedScreen.classList.add('hidden');
+  
   if (unsubscribeMessages) unsubscribeMessages();
   if (unsubscribeTyping) unsubscribeTyping();
+  if (unsubscribeBlockStatus) {
+    unsubscribeBlockStatus();
+    unsubscribeBlockStatus = null;
+  }
 });
 
 // Profile Editing
@@ -225,6 +252,34 @@ document.getElementById('pfp-upload').addEventListener('change', async (e) => {
   } catch (err) { console.error(err); }
 });
 
+// Unblock Submission
+unblockBtn.addEventListener('click', async () => {
+  const code = unblockCodeInput.value.trim();
+  if (!code) return alert("Please enter an unblock code.");
+
+  try {
+    const res = await fetch('unblockcodes.txt');
+    if(!res.ok) throw new Error("Could not load codes file.");
+    const text = await res.text();
+    const validCodes = text.split('\n').map(c => c.trim()).filter(c => c !== "");
+
+    if(validCodes.includes(code)) {
+      const claimCheck = await get(child(dbRef, `used_unblock_codes/${code}`));
+      if(claimCheck.exists()) return alert("This unblock code has already been used!");
+      
+      await set(ref(db, `used_unblock_codes/${code}`), currentActiveUser);
+      await remove(ref(db, `blocked_users/${currentActiveUser}`));
+      
+      alert("Successfully unblocked! Welcome back.");
+      unblockCodeInput.value = "";
+    } else {
+      return alert("Invalid unblock code.");
+    }
+  } catch(err) { 
+    return alert("Error verifying code."); 
+  }
+});
+
 // Keydown listener for the global screen event
 document.addEventListener('keydown', async (e) => {
   if (e.key === '=' && currentActiveUser) {
@@ -253,16 +308,13 @@ onValue(ref(db, 'global_events/cheddar'), (snapshot) => {
     const now = Date.now();
     const timeDiff = now - data.time;
     
-    // Only trigger if the event was set within the last 30 seconds
     if (timeDiff < 30000) {
       const remainingTime = 30000 - timeDiff;
       
       cheddarOverlay.classList.remove('hidden');
       cheddarAudio.currentTime = 0;
-      cheddarAudio.loop = true; // Ensure looping via JS as well
-      
-      // Auto-play might be blocked by browsers if the user hasn't interacted with the page yet
-      cheddarAudio.play().catch(e => console.warn("Audio autoplay blocked by browser.", e));
+      cheddarAudio.loop = true;
+      cheddarAudio.play().catch(e => console.warn("Audio autoplay blocked.", e));
       
       clearTimeout(cheddarTimeout);
       cheddarTimeout = setTimeout(() => {
@@ -274,7 +326,7 @@ onValue(ref(db, 'global_events/cheddar'), (snapshot) => {
   }
 });
 
-// Delegate Clicks for Usernames & Replies
+// Delegate Clicks for Usernames, Replies, & Blocks
 messagesContainer.addEventListener('click', async (e) => {
   if (e.target.classList.contains('message-author')) {
     const clickedUser = e.target.dataset.username;
@@ -288,7 +340,7 @@ messagesContainer.addEventListener('click', async (e) => {
         
         alert(`User: @${clickedUser}${disp}\nAge: ${age}\nBio: ${bio}`);
       } else {
-        alert(`User @${clickedUser} could not be found. They might be an old test account.`);
+        alert(`User @${clickedUser} could not be found.`);
       }
     } catch(err) { console.error(err); }
   }
@@ -308,6 +360,19 @@ messagesContainer.addEventListener('click', async (e) => {
     replyToText.textContent = rText || "Attachment";
     replyBanner.classList.remove('hidden');
     messageInput.focus();
+  }
+
+  if (e.target.classList.contains('block-btn')) {
+    const targetUsername = e.target.dataset.username;
+    const confirmBlock = confirm(`Are you sure you want to block ${targetUsername} from the site?`);
+    if (confirmBlock) {
+      try {
+        await set(ref(db, `blocked_users/${targetUsername}`), true);
+        alert(`${targetUsername} has been blocked.`);
+      } catch (err) {
+        console.error("Error blocking user:", err);
+      }
+    }
   }
 });
 
@@ -486,7 +551,6 @@ function loadMessages() {
         }
       }
       
-      // Load badges for chat messages
       let badges = '';
       if (data.username === 'thecoolwebsitemaker') {
         badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
@@ -508,6 +572,11 @@ function loadMessages() {
         `;
       }
 
+      let blockBtnHtml = "";
+      if (currentUserData.isStaff && !data.isStaff && data.username !== currentActiveUser) {
+        blockBtnHtml = `<button class="block-btn" data-username="${data.username}" style="background-color: red; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 11px; margin-left: 5px;">Block from site</button>`;
+      }
+
       const safeText = data.text ? data.text.replace(/"/g, '&quot;') : '';
       const safeDisp = data.displayName ? data.displayName.replace(/"/g, '&quot;') : '';
 
@@ -519,6 +588,7 @@ function loadMessages() {
             <span class="message-time">${timeString}</span>
             <div class="message-actions">
               <button class="reply-btn" data-username="${data.username}" data-displayname="${safeDisp}" data-text="${safeText}">Reply</button>
+              ${blockBtnHtml}
             </div>
           </div>
           ${replyHtml}
