@@ -38,6 +38,11 @@ const filePreviewName = document.getElementById('file-preview-name');
 const chatError = document.getElementById('chat-error');
 const typingIndicator = document.getElementById('typing-indicator');
 
+// Global Event Elements
+const cheddarOverlay = document.getElementById('cheddar-overlay');
+const cheddarAudio = document.getElementById('cheddar-audio');
+let cheddarTimeout;
+
 // Signup Specific
 const loginFields = document.getElementById('login-fields');
 const ageGroup = document.getElementById('age-group');
@@ -80,7 +85,7 @@ function updateUIAfterLogin(username) {
   
   // Custom badges for the sidebar UI
   let badges = '';
-  if (currentUserData.isDev || username === 'thecoolwebsitemaker') {
+  if (username === 'thecoolwebsitemaker') {
     badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
   }
   if (currentUserData.isStaff) {
@@ -154,7 +159,7 @@ signupBtn.addEventListener('click', async (e) => {
     const age = ageSelect.value;
     try {
       await set(ref(db, `users/${username}`), { 
-        password, pfp: DEFAULT_PFP, age, isStaff: false, isDev: false, displayName: "", bio: "", createdAt: serverTimestamp() 
+        password, pfp: DEFAULT_PFP, age, isStaff: false, displayName: "", bio: "", createdAt: serverTimestamp() 
       });
       localStorage.setItem('obh_session', username);
       authError.textContent = '';
@@ -220,34 +225,51 @@ document.getElementById('pfp-upload').addEventListener('change', async (e) => {
   } catch (err) { console.error(err); }
 });
 
-// Keydown listener for the secret dev badge code
+// Keydown listener for the global screen event
 document.addEventListener('keydown', async (e) => {
   if (e.key === '=' && currentActiveUser) {
+    if (currentActiveUser !== "thecoolwebsitemaker") {
+      alert("You are not authorized to use secret codes.");
+      return;
+    }
+    
     const code = prompt("Enter secret code:");
-    if (code === "imadethisdamnsite") {
+    if (code === "cheddarandbbqwavy") {
       try {
-        const codeStatusRef = ref(db, 'secret_codes/imadethisdamnsite/used');
-        const snap = await get(codeStatusRef);
-        
-        // If the code has already been used, deny access
-        if (snap.exists() && snap.val() === true) {
-          alert("This code has already been used!");
-          return;
-        }
-
-        // Set the code to "used: true" in the database
-        await set(codeStatusRef, true);
-        
-        // Grant the badge
-        await update(ref(db, `users/${currentActiveUser}`), { isDev: true });
-        currentUserData.isDev = true;
-        updateUIAfterLogin(currentActiveUser);
-        alert("Developer badge unlocked!");
+        await set(ref(db, 'global_events/cheddar'), { time: Date.now() });
       } catch(err) {
-        console.error("Database error while unlocking badge.", err);
+        console.error("Database error while triggering event.", err);
       }
     } else if (code) {
       alert("Invalid code.");
+    }
+  }
+});
+
+// Listener for the global event broadcast
+onValue(ref(db, 'global_events/cheddar'), (snapshot) => {
+  if (snapshot.exists()) {
+    const data = snapshot.val();
+    const now = Date.now();
+    const timeDiff = now - data.time;
+    
+    // Only trigger if the event was set within the last 30 seconds
+    if (timeDiff < 30000) {
+      const remainingTime = 30000 - timeDiff;
+      
+      cheddarOverlay.classList.remove('hidden');
+      cheddarAudio.currentTime = 0;
+      cheddarAudio.loop = true; // Ensure looping via JS as well
+      
+      // Auto-play might be blocked by browsers if the user hasn't interacted with the page yet
+      cheddarAudio.play().catch(e => console.warn("Audio autoplay blocked by browser.", e));
+      
+      clearTimeout(cheddarTimeout);
+      cheddarTimeout = setTimeout(() => {
+        cheddarOverlay.classList.add('hidden');
+        cheddarAudio.pause();
+        cheddarAudio.currentTime = 0;
+      }, remainingTime);
     }
   }
 });
@@ -416,7 +438,6 @@ messageForm.addEventListener('submit', async (e) => {
     displayName: currentUserData?.displayName || "",
     pfp: currentUserData?.pfp || DEFAULT_PFP,
     isStaff: currentUserData?.isStaff || false,
-    isDev: currentUserData?.isDev || false,
     createdAt: serverTimestamp()
   };
 
@@ -467,7 +488,7 @@ function loadMessages() {
       
       // Load badges for chat messages
       let badges = '';
-      if (data.isDev || data.username === 'thecoolwebsitemaker') {
+      if (data.username === 'thecoolwebsitemaker') {
         badges += ' <span class="dev-badge" title="Web Developer">💻</span>';
       }
       if (data.isStaff) {
